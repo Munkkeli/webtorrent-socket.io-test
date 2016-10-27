@@ -1,0 +1,12 @@
+# Ignore npm modules
+/node_modules
+
+# Ignore gulp generated assets
+/cdn
+
+# Ignore credentials & configs
+/credentials
+/config
+
+# Ignore thumbnails
+/**/Thumbs.db

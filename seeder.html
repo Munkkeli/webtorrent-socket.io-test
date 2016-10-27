@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="js/webtorrent.min.js"></script>
+    <script src="js/simplepeer.min.js"></script>
+    <script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
+  </head>
+  <body>
+    <input type="file" id="file" accept='.mp4,.webm,.mp3' />
+
+    <script>
+      var socket = io('localhost:5638/media', { transports: ['websocket'] });
+      var offer = null;
+
+      var torrent = null;
+      var peers = {};
+
+      document.getElementById('file').onchange = function (event) {
+        var file = event.target.files[0];
+        
+        var client = new WebTorrent({ dht: false, tracker: false });
+        torrent = client.seed(file, {
+          createdBy: '56efd9cd300706a428971af4',
+          private: true
+        }, function (torrent) {
+          console.log('id', socket.id);
+
+          localStorage.item = JSON.stringify({
+            _user: '56efd9cd300706a428971af4',
+            name: file.name,
+            hash: torrent.infoHash,
+            socket: btoa('/media#' + socket.id),
+            image: null,
+            duration: 1
+          });
+        });
+
+        torrent.on('infoHash', function () {
+          return console.log('hash', torrent.infoHash);
+        });
+
+        torrent.on('metadata', function () {
+          return console.log('metadata');
+        });
+
+        torrent.on('warning', function (error) {
+          return console.error('warning', error);
+        });
+
+        torrent.on('error', function (error) {
+          return console.error('error', error);
+        });
+
+        torrent.on('ready', function () {
+          return console.log('ready');
+        });
+
+        torrent.on('wire', function (wire) {
+          return console.log('wire');
+        });
+      };
+
+      socket.on('request', function (id) {
+        if (id === btoa(socket.id)) return;
+        if (peers.hasOwnProperty(id)) return;
+
+        var peer = new SimplePeer({
+          initiator: true,
+          channelName: 'test',
+          trickle: false
+        });
+
+        peer.on('signal', function (data) {
+          if (!data.type || data.type !== 'offer') return;
+          console.log('- signal');
+          return socket.emit('offer', { id: id, offer: btoa(JSON.stringify(data)) });
+        });
+
+        peer.on('warning', function (error) {
+          return console.error('- warning', error);
+        });
+
+        peer.on('error', function (error) {
+          return console.error('- error', error);
+        });
+
+        peer.on('connect', function () {
+          return console.log('- connect :)');
+        });
+
+        peers[id] = peer;
+
+        return console.log('- request');
+      });
+
+      socket.on('answer', function (data) {
+        if (!data || !data.id || !data.answer) return;
+        if (data.id === btoa(socket.id)) return;
+        if (!peers.hasOwnProperty(data.id)) return;
+
+        console.log('- answer');
+
+        peers[data.id].signal(JSON.parse(atob(data.answer)));
+        return console.log('- peer', torrent.addPeer(peers[data.id]));
+      });
+    </script>
+  </body>
+</html>

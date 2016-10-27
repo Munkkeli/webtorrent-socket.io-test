@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="js/webtorrent.min.js"></script>
+    <script src="js/simplepeer.min.js"></script>
+    <script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
+  </head>
+  <body>
+    <video id="video" controls></video>
+
+    <script>
+      var socket = io('localhost:5638/media', { transports: ['websocket'] });
+      var client = new WebTorrent({ dht: false, tracker: false });
+
+      var item = JSON.parse(localStorage.item);
+      var torrent = client.add(item.hash);
+
+      socket.emit('request', { id: item.socket });
+
+      socket.on('offer', function (offer) {
+        var peer = new SimplePeer({
+          channelName: 'test',
+          trickle: false
+        });
+        
+        peer.on('error', function (error) {
+          return console.error(error);
+        });
+
+        // Send answer to seeder
+        peer.on('signal', function (data) {
+          if (!data.type || data.type !== 'answer') return;
+          console.log('answer');
+          return socket.emit('answer', { id: item.socket, answer: btoa(JSON.stringify(data)) });
+        });
+
+        peer.on('connect', function () {
+          console.log('connect');
+          return console.log('peer', torrent.addPeer(peer));
+        });
+
+        peer.signal(JSON.parse(atob(offer)));
+
+        return console.log('offer');
+      });
+
+      torrent.on('metadata', function () {
+        console.log('metadata');
+
+        var file = torrent.files[0];
+        file.renderTo(document.getElementById('video'), function (error, elem) {
+          if (error) throw error;
+        });
+      });
+
+      torrent.on('error', function (error) {
+        throw error;
+      });
+
+      torrent.on('ready', function () {
+        return console.log('ready');
+      });
+
+      torrent.on('wire', function (wire) {
+        return console.log('wire');
+      });
+    </script>
+  </body>
+</html>
